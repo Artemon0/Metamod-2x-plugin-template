@@ -5,5 +5,3 @@
 [submodule "metamod-source"]
 	path = metamod-source
 	url = https://github.com/alliedmodders/metamod-source.git
-
-// run `git submodule update --init --recursive` to initialize and fetch the submodules.
