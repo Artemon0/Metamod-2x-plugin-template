@@ -24,6 +24,9 @@ function Get-FieldValue {
     if (-not [string]::IsNullOrWhiteSpace($Value)) {
         return $Value.Trim()
     }
+    if (-not $Required) {
+        return ""
+    }
 
     while ($true) {
         $prompt = $Label

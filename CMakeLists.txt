@@ -6,7 +6,6 @@ project(Template LANGUAGES CXX C)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(JsonUtil)
 include(CompilerSettings)
-include(Protobuf)
 include(Package)
 
 if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -40,9 +39,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TEMPLATE_SDK_ROOT "${CMAKE_SOURCE_DIR}/hl2sdk-cs2")
 set(TEMPLATE_MMS_ROOT "${CMAKE_SOURCE_DIR}/metamod-source")
 set(TEMPLATE_MANIFESTS_ROOT "${TEMPLATE_MMS_ROOT}/hl2sdk-manifests/manifests")
-set(TEMPLATE_FUNCHOOK_ROOT "${CMAKE_SOURCE_DIR}/vendor/funchook")
 
-foreach (_pair "TEMPLATE_SDK_ROOT|CS2 SDK" "TEMPLATE_MMS_ROOT|Metamod:Source" "TEMPLATE_MANIFESTS_ROOT|HL2SDK manifests" "TEMPLATE_FUNCHOOK_ROOT|funchook")
+foreach (_pair "TEMPLATE_SDK_ROOT|CS2 SDK" "TEMPLATE_MMS_ROOT|Metamod:Source" "TEMPLATE_MANIFESTS_ROOT|HL2SDK manifests")
     string(REPLACE "|" ";" _pair_list "${_pair}")
     list(GET _pair_list 0 _var)
     list(GET _pair_list 1 _desc)
@@ -69,8 +67,8 @@ endforeach ()
 if (NOT TEMPLATE_META_NAME MATCHES "^[a-z0-9_-]+$")
     message(FATAL_ERROR "The plugin name may contain only lowercase letters, numbers, underscores, and hyphens.")
 endif ()
-if (NOT TEMPLATE_META_ALIAS MATCHES "^[a-z0-9_-]+$")
-    message(FATAL_ERROR "The plugin alias may contain only lowercase letters, numbers, underscores, and hyphens.")
+if (NOT TEMPLATE_META_ALIAS MATCHES "^[A-Za-z0-9_-]+$")
+    message(FATAL_ERROR "The plugin alias may contain only letters, numbers, underscores, and hyphens.")
 endif ()
 if (NOT TEMPLATE_META_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
     message(FATAL_ERROR "The plugin version must use major.minor.patch format.")
@@ -136,18 +134,12 @@ foreach (_manifest ${_template_all_manifests})
 endforeach ()
 
 
-template_generate_protobuf(TEMPLATE_PROTOBUF_SOURCES TEMPLATE_PROTOBUF_GEN_DIR)
-
-add_library(template-protobuf STATIC ${TEMPLATE_PROTOBUF_SOURCES})
-add_dependencies(template-protobuf template-protobuf-gen)
-template_configure_target(template-protobuf)
-target_include_directories(template-protobuf PRIVATE "${TEMPLATE_PROTOBUF_GEN_DIR}")
-
-
-file(GLOB_RECURSE TEMPLATE_PLUGIN_SOURCES CONFIGURE_DEPENDS
-        "${CMAKE_SOURCE_DIR}/src/*.cpp"
-        "${CMAKE_SOURCE_DIR}/src/*.c"
+set(TEMPLATE_PLUGIN_SOURCES "${CMAKE_SOURCE_DIR}/src/template.cpp")
+file(GLOB_RECURSE TEMPLATE_FEATURE_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/src/features/*.cpp"
+        "${CMAKE_SOURCE_DIR}/src/features/*.c"
 )
+list(APPEND TEMPLATE_PLUGIN_SOURCES ${TEMPLATE_FEATURE_SOURCES})
 if (WIN32)
     list(FILTER TEMPLATE_PLUGIN_SOURCES EXCLUDE REGEX "_linux\\.(c|cpp)$")
 else ()
@@ -156,10 +148,7 @@ endif ()
 
 add_library("${TEMPLATE_META_NAME}" MODULE
         ${TEMPLATE_PLUGIN_SOURCES}
-        "${TEMPLATE_SDK_ROOT}/entity2/entityidentity.cpp"
-        "${TEMPLATE_SDK_ROOT}/entity2/entitysystem.cpp"
 )
-add_dependencies("${TEMPLATE_META_NAME}" template-protobuf-gen)
 template_configure_target("${TEMPLATE_META_NAME}")
 
 set_target_properties("${TEMPLATE_META_NAME}" PROPERTIES
@@ -172,31 +161,32 @@ target_include_directories("${TEMPLATE_META_NAME}" PRIVATE
         "${TEMPLATE_SDK_ROOT}"
         "${TEMPLATE_SDK_ROOT}/public/entity2"
         "${TEMPLATE_SDK_ROOT}/game/server"
-        "${TEMPLATE_FUNCHOOK_ROOT}/include"
-        "${TEMPLATE_PROTOBUF_GEN_DIR}"
+        "${TEMPLATE_MMS_ROOT}/third_party/khook/include"
 )
-
-target_link_libraries("${TEMPLATE_META_NAME}" PRIVATE template-protobuf)
 
 if (WIN32)
     target_link_libraries("${TEMPLATE_META_NAME}" PRIVATE
             ${TEMPLATE_SDK_WINDOWS_LIBS}
             "psapi.lib"
-            "${TEMPLATE_FUNCHOOK_ROOT}/lib/funchook.lib"
-            "${TEMPLATE_FUNCHOOK_ROOT}/lib/distorm.lib"
             "${TEMPLATE_SDK_ROOT}/lib/public/win64/mathlib.lib"
-            "${TEMPLATE_SDK_ROOT}/lib/public/win64/steam_api64.lib"
-            "delayimp.lib"
     )
-    target_link_options("${TEMPLATE_META_NAME}" PRIVATE "/DELAYLOAD:steam_api64.dll")
 else ()
     target_link_libraries("${TEMPLATE_META_NAME}" PRIVATE
             ${TEMPLATE_SDK_LINUX_POSTLINK_LIBS}
             ${TEMPLATE_SDK_LINUX_DYNAMIC_LIBS}
-            "${TEMPLATE_FUNCHOOK_ROOT}/lib/libfunchook.a"
-            "${TEMPLATE_FUNCHOOK_ROOT}/lib/libdistorm.a"
             "${TEMPLATE_SDK_ROOT}/lib/linux64/mathlib.a"
     )
 endif ()
+
+include(Protobuf)
+template_generate_protobuf(TEMPLATE_PROTOBUF_SOURCES TEMPLATE_PROTOBUF_GEN_DIR)
+
+add_library(template-protobuf STATIC ${TEMPLATE_PROTOBUF_SOURCES})
+add_dependencies(template-protobuf template-protobuf-gen)
+template_configure_target(template-protobuf)
+target_include_directories(template-protobuf PRIVATE "${TEMPLATE_PROTOBUF_GEN_DIR}")
+target_include_directories("${TEMPLATE_META_NAME}" PRIVATE "${TEMPLATE_PROTOBUF_GEN_DIR}")
+target_link_libraries("${TEMPLATE_META_NAME}" PRIVATE template-protobuf)
+add_dependencies("${TEMPLATE_META_NAME}" template-protobuf-gen)
 
 template_add_package("${TEMPLATE_META_NAME}")
